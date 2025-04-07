@@ -50,12 +50,13 @@ import java.util.Locale
 fun FlightTrackerScreen(
     uiState: FlightTrackingState,
     lastFetchTime: String?,
+    isTrackingStopped: Boolean, // Add this parameter to receive tracking status
     onTrackFlight: (String) -> Unit,
-    onStopTracking: () -> Unit
+    onStopTracking: () -> Unit,
+    onNavigateToStats: () -> Unit
 ) {
     var flightNumber by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
-    var isTrackingStopped by remember { mutableStateOf(false) }
     
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -66,11 +67,21 @@ fun FlightTrackerScreen(
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            Text(
-                text = "Flight Tracker",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Flight Tracker",
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                
+                Button(onClick = onNavigateToStats) {
+                    Text("Statistics")
+                }
+            }
             
             Spacer(modifier = Modifier.height(16.dp))
             
@@ -89,7 +100,6 @@ fun FlightTrackerScreen(
                     onDone = {
                         focusManager.clearFocus()
                         onTrackFlight(flightNumber)
-                        isTrackingStopped = false
                     }
                 )
             )
@@ -105,7 +115,6 @@ fun FlightTrackerScreen(
                     onClick = { 
                         focusManager.clearFocus()
                         onTrackFlight(flightNumber) 
-                        isTrackingStopped = false
                     },
                     modifier = Modifier.weight(1f)
                 ) {
@@ -113,10 +122,7 @@ fun FlightTrackerScreen(
                 }
                 
                 Button(
-                    onClick = { 
-                        onStopTracking() 
-                        isTrackingStopped = true
-                    },
+                    onClick = { onStopTracking() },
                     modifier = Modifier.weight(1f)
                 ) {
                     Text("Stop Tracking")

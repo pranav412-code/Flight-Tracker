@@ -1,9 +1,11 @@
 package com.example.mc_a2.ui
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mc_a2.data.FlightRepository
 import com.example.mc_a2.data.Result
+import com.example.mc_a2.data.db.FlightDatabase
 import com.example.mc_a2.data.model.Flight
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,8 +17,9 @@ import java.util.Locale
 import java.util.Timer
 import java.util.TimerTask
 
-class FlightTrackingViewModel : ViewModel() {
-    private val repository = FlightRepository()
+class FlightTrackingViewModel(application: Application) : AndroidViewModel(application) {
+    private val database = FlightDatabase.getDatabase(application)
+    private val repository = FlightRepository(database)
     
     private val _uiState = MutableStateFlow<FlightTrackingState>(FlightTrackingState.Initial)
     val uiState: StateFlow<FlightTrackingState> = _uiState
@@ -24,7 +27,12 @@ class FlightTrackingViewModel : ViewModel() {
     private val _lastFetchTime = MutableStateFlow<String?>(null)
     val lastFetchTime: StateFlow<String?> = _lastFetchTime
     
+    // Add a flag to track when tracking is stopped
+    private val _isTrackingStopped = MutableStateFlow(false)
+    val isTrackingStopped: StateFlow<Boolean> = _isTrackingStopped
+    
     private var trackingTimer: Timer? = null
+    private var currentFlightNumber: String? = null
     
     fun trackFlight(flightNumber: String) {
         if (flightNumber.isBlank()) {
@@ -34,8 +42,14 @@ class FlightTrackingViewModel : ViewModel() {
         
         _uiState.value = FlightTrackingState.Loading
         
+        // Reset tracking stopped flag
+        _isTrackingStopped.value = false
+        
         // Cancel any existing timer
-        stopTracking()
+        stopTracking(false)
+        
+        // Store the current flight number
+        currentFlightNumber = flightNumber
         
         // Start fetching flight data immediately
         fetchFlightData(flightNumber)
@@ -59,7 +73,7 @@ class FlightTrackingViewModel : ViewModel() {
                 .catch { e ->
                     _uiState.value = FlightTrackingState.Error("Error: ${e.message}")
                 }
-                .collect { result ->
+                .collect { result -> 
                     when (result) {
                         is Result.Loading -> {
                             if (_uiState.value !is FlightTrackingState.Success) {
@@ -70,23 +84,43 @@ class FlightTrackingViewModel : ViewModel() {
                             val flight = result.data
                             if (flight != null) {
                                 _uiState.value = FlightTrackingState.Success(flight)
+                                
+                                // Store flight data in the database for statistics
+                                saveFlight(flight)
                             } else {
                                 _uiState.value = FlightTrackingState.Error("Flight not found")
-                                stopTracking()
+                                stopTracking(true)
                             }
                         }
                         is Result.Error -> {
                             _uiState.value = FlightTrackingState.Error(result.message)
-                            stopTracking()
+                            stopTracking(true)
                         }
                     }
                 }
         }
     }
     
-    fun stopTracking() {
+    private fun saveFlight(flight: Flight) {
+        viewModelScope.launch {
+            repository.saveFlight(flight)
+        }
+    }
+    
+    fun stopTracking(setStoppedFlag: Boolean = true) {
         trackingTimer?.cancel()
         trackingTimer = null
+        currentFlightNumber = null
+        
+        if (setStoppedFlag) {
+            _isTrackingStopped.value = true
+        }
+    }
+    
+    fun resetTrackingStatus() {
+        if (_isTrackingStopped.value) {
+            _isTrackingStopped.value = true
+        }
     }
     
     override fun onCleared() {
