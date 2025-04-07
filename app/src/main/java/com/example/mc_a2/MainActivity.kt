@@ -5,12 +5,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.mc_a2.ui.FlightTrackingViewModel
+import com.example.mc_a2.ui.FlightTrackerScreen
 import com.example.mc_a2.ui.theme.MC_A2Theme
 
 class MainActivity : ComponentActivity() {
@@ -19,11 +22,11 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MC_A2Theme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    FlightTrackerApp()
                 }
             }
         }
@@ -31,17 +34,19 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
+fun FlightTrackerApp() {
+    val viewModel: FlightTrackingViewModel = viewModel()
+    val uiState by viewModel.uiState.collectAsState()
+    val lastFetchTime by viewModel.lastFetchTime.collectAsState()
+    
+    FlightTrackerScreen(
+        uiState = uiState,
+        lastFetchTime = lastFetchTime,
+        onTrackFlight = { flightNumber ->
+            viewModel.trackFlight(flightNumber)
+        },
+        onStopTracking = {
+            viewModel.stopTracking()
+        }
     )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    MC_A2Theme {
-        Greeting("Android")
-    }
 }
