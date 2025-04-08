@@ -1,6 +1,7 @@
 package com.example.mc_a2.ui
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mc_a2.data.FlightRepository
@@ -11,6 +12,7 @@ import com.example.mc_a2.workers.FlightDataManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class FlightStatisticsViewModel(application: Application) : AndroidViewModel(application) {
@@ -39,17 +41,25 @@ class FlightStatisticsViewModel(application: Application) : AndroidViewModel(app
             }
         }
         
-        // Check if data collection is already active
+        // Check the actual state of the WorkManager
         _dataCollectionActive.value = flightDataManager.isFlightDataCollectionScheduled()
     }
     
     /**
-     * Start collecting flight data for tracked flights
-     */
+    * Start collecting flight data for tracked flights
+    */
     fun startFlightDataCollection() {
+        // Set the UI state immediately to prevent flickering
+        _dataCollectionActive.value = true
+        
         viewModelScope.launch {
-            // Get all tracked flight numbers from the database
-            repository.getAllFlightRecords().collectLatest { records ->
+            try {
+                // First cancel any existing work to ensure a clean start
+                flightDataManager.cancelAllFlightDataCollection()
+                
+                // Get all tracked flight numbers from the database WITHOUT using collectLatest
+                // This avoids the recursive loop that was causing multiple API calls
+                val records = repository.getAllFlightRecords().first()
                 val trackedFlights = records.map { it.flightNumber }.distinct()
                 
                 if (trackedFlights.isNotEmpty()) {
@@ -57,26 +67,38 @@ class FlightStatisticsViewModel(application: Application) : AndroidViewModel(app
                     val latestFlight = trackedFlights.lastOrNull()
                     if (latestFlight != null) {
                         val flightsToTrack = listOf(latestFlight)
-                        flightDataManager.scheduleFlightDataCollection(flightsToTrack)
-                        _dataCollectionActive.value = true
                         
-                        // Also trigger an immediate data collection with just the latest flight
+                        // Reset the data collection counters to ensure immediate collection
+                        flightDataManager.resetDataCollection()
+                        
+                        // First, trigger an immediate data collection
                         flightDataManager.collectFlightDataNow(flightsToTrack)
+                        
+                        // Then, schedule the periodic data collection with initial delay of 8 hours
+                        flightDataManager.scheduleFlightDataCollection(flightsToTrack, 8)
                     }
                 } else {
                     // No flights have been tracked yet
                     _dataCollectionActive.value = false
                 }
+            } catch (e: Exception) {
+                Log.e("FlightStatisticsVM", "Error starting flight data collection", e)
+                _dataCollectionActive.value = false
             }
         }
     }
     
     /**
-     * Stop flight data collection
-     */
+    * Stop flight data collection immediately
+    */
     fun stopFlightDataCollection() {
-        flightDataManager.cancelAllFlightDataCollection()
+        // Set the UI state immediately to prevent flickering
         _dataCollectionActive.value = false
+        
+        // Then cancel the work in the background
+        viewModelScope.launch {
+            flightDataManager.cancelAllFlightDataCollection()
+        }
     }
     
     /**

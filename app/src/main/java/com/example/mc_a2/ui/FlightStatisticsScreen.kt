@@ -93,6 +93,7 @@ fun FlightStatisticsScreen(
                             style = MaterialTheme.typography.bodyMedium
                         )
                         
+                        // Updated Switch component:
                         Switch(
                             checked = dataCollectionActive,
                             onCheckedChange = { active ->
@@ -140,7 +141,10 @@ fun FlightStatisticsScreen(
                         
                         Button(
                             onClick = { 
-                                viewModel.startFlightDataCollection() 
+                                // Only start if not already active
+                                if (!dataCollectionActive) {
+                                    viewModel.startFlightDataCollection() 
+                                }
                             }
                         ) {
                             Text("Start Data Collection")

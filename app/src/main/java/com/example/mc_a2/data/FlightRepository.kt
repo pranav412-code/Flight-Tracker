@@ -9,6 +9,7 @@ import com.example.mc_a2.data.model.Flight
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.first
 import retrofit2.HttpException
 import java.io.IOException
 import java.text.SimpleDateFormat
@@ -208,6 +209,39 @@ class FlightRepository(private val database: FlightDatabase) {
     private fun getTodayDate(): String {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         return dateFormat.format(Date())
+    }
+    
+    // New method to get last flight record from the database
+    suspend fun getLastFlightRecord(): FlightRecord? {
+        // Collects the first flight record from the Flow (ordered by recordDate DESC)
+        return flightRecordDao.getAllFlightRecords().first().firstOrNull()
+    }
+
+    // New method to fetch and store flight data by route
+    suspend fun fetchAndStoreFlightDataByRoute(departureAirport: String, arrivalAirport: String): Result<Flight?> {
+        return try {
+            // Assumes apiService has a method getFlightByRoute; adjust endpoint and parameters as needed.
+            val response = apiService.getFlightByRoute(apiKey, departureAirport, arrivalAirport)
+            if (response.isSuccessful) {
+                val flightResponse = response.body()
+                val flight = flightResponse?.data?.firstOrNull()
+                if (flight != null) {
+                    val flightRecord = convertToFlightRecord(flight)
+                    if (flightRecord != null) {
+                        flightRecordDao.insertFlightRecord(flightRecord)
+                    }
+                }
+                Result.Success(flight)
+            } else {
+                Result.Error("API Error: ${response.message()}")
+            }
+        } catch (e: IOException) {
+            Result.Error("Network Error: ${e.message}")
+        } catch (e: HttpException) {
+            Result.Error("HTTP Error: ${e.message}")
+        } catch (e: Exception) {
+            Result.Error("Unknown Error: ${e.message}")
+        }
     }
 }
 
