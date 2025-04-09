@@ -1,20 +1,25 @@
 # Flight Tracker Application
 
 ## Overview
-This Android application allows users to track flights in real-time, view flight status, collect historical flight data, and analyze flight statistics across different routes. Built with modern Android development practices, the app provides an intuitive interface for monitoring your favorite flights and understanding travel patterns.
+A modern Android application for tracking real-time flight data, providing users with up-to-date information about flights, including departure and arrival times, delays, and route information. The app offers both online functionality using the Aviation Stack API and offline capabilities through local data storage.
 
 ## Features
-- **Real-time Flight Tracking**: Search and monitor flights by flight number
-- **Flight Details Display**: View comprehensive information including:
-  - Departure/arrival airports and cities
-  - Scheduled and actual departure/arrival times
-  - Flight status (scheduled, delayed, landed)
+- Real-time flight tracking using live data
+- Search flights by airline, flight number, or route
+- Save favorite flights for quick access
+- View flight details including:
+  - Departure and arrival times
+  - Origin and destination airports
+  - Flight status (on-time, delayed, cancelled)
   - Delay information
-- **Historical Data Collection**: Automatically collect flight data in the background
-- **Flight Statistics**: Analyze flight performance across routes with:
-  - Average flight times between airports
-  - Delay statistics
-  - Historical flight records
+- Offline access to previously viewed flight data
+- Background updates for tracked flights
+- Statistics on flight punctuality and routes
+
+## Screenshots
+
+![tracking-screenshot](tracking-screenshot.png)
+![statistics-screenshot](statistics-screenshot.png)
 
 ## Technology Stack
 - **Language**: Kotlin
@@ -27,54 +32,25 @@ This Android application allows users to track flights in real-time, view flight
   - Coroutines & Flow: Asynchronous operations
   - WorkManager: Background tasks scheduling
   - Lifecycle components: ViewModel integration
+  - Material3: Modern UI components
 
 ## Setup Instructions
-
-### Prerequisites
-- Android Studio Hedgehog (2023.1.1) or newer
-- Minimum SDK: 24 (Android 7.0)
-- Target SDK: 35
-- Aviation Stack API key (for flight data)
-
-### Getting Started
-1. Clone the repository:
-   ```
-   git clone <repository-url>
-   ```
-
-2. Create API key file:
-   Create a new Kotlin file at `app/src/main/java/com/example/mc_a2/data/api/ApiKeys.kt` with:
-   ```kotlin
-   package com.example.mc_a2.data.api
-
-   object ApiKeys {
-       const val AVIATION_STACK_API_KEY = "your_api_key_here"
-   }
-   ```
-
-3. Build and run the application using Android Studio
+1. Clone the repository
+2. Open the project in Android Studio (Arctic Fox or newer)
+3. Create an account at [Aviation Stack](https://aviationstack.com/) to get an API key
+4. Add your API key to the project:
+   - Create a file named `apikey.properties` in the project root
+   - Add the line: `AVIATION_STACK_API_KEY="your_api_key_here"`
+5. Sync the project and build
 
 ## Usage Guide
-
-### Tracking a Flight
-1. From the main screen, enter a flight number in the search field
-2. Tap the search button to fetch current flight information
-3. View real-time flight details including status, departure/arrival information
-4. Tap "Track This Flight" to add the flight to your tracked flights
-
-### Viewing Flight Statistics
-1. Navigate to the Statistics screen using the navigation menu
-2. View average flight times across different routes
-3. See the number of flight records collected for each route
-4. Enable/disable background data collection with the toggle switch
-
-### Background Data Collection
-- Toggle background data collection on/off from the Statistics screen
-- When enabled, the app will periodically fetch updated information for tracked flights
-- Data is stored locally for offline access and statistical analysis
+- **Search Flights**: Use the search bar to find flights by number, airline, or route
+- **Track Flights**: Mark flights as favorites to keep track of them
+- **View Details**: Tap on a flight to see comprehensive information
+- **Offline Access**: Previously loaded flight data is available offline
+- **Settings**: Configure update frequency and data retention policies
 
 ## Architecture
-
 The application follows the MVVM (Model-View-ViewModel) architecture pattern with these key components:
 
 - **Data Layer**:
@@ -89,9 +65,9 @@ The application follows the MVVM (Model-View-ViewModel) architecture pattern wit
 - **UI Layer**:
   - Jetpack Compose screens for a modern, declarative UI
   - State hoisting pattern for UI state management
+  - Material3 components for consistent design language
 
 ## Database Structure
-
 The app uses Room database with the following main entity:
 
 - `FlightRecord`: Stores historical flight data including:
@@ -101,11 +77,22 @@ The app uses Room database with the following main entity:
   - Delay information
   - Record metadata (when collected, flight date)
 
-## API Integration
+- `RouteInfo`: Stores information about unique routes:
+  - Origin and destination airports
+  - Statistics about frequency and punctuality
 
+## API Integration
 The app integrates with the [Aviation Stack API](https://aviationstack.com/) to fetch real-time flight data. The implementation includes:
 
 - RESTful API calls using Retrofit
 - JSON parsing with Moshi adapters
 - Error handling and offline support
 - Rate limiting consideration
+- Background data refreshing with WorkManager
+
+## Data Flow
+1. User initiates a flight search
+2. App first checks local database for matching data
+3. If data is missing or outdated, a network request is made
+4. Results are displayed and simultaneously cached for offline access
+5. Background workers periodically update tracked flight information
