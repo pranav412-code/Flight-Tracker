@@ -16,6 +16,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.Timer
 import java.util.TimerTask
+import android.util.Log
 
 class FlightTrackingViewModel(application: Application) : AndroidViewModel(application) {
     private val database = FlightDatabase.getDatabase(application)
@@ -71,7 +72,10 @@ class FlightTrackingViewModel(application: Application) : AndroidViewModel(appli
             
             repository.getFlightByNumber(flightNumber)
                 .catch { e ->
-                    _uiState.value = FlightTrackingState.Error("Error: ${e.message}")
+                    // Log the detailed error
+                    Log.e("FlightTrackingViewModel", "API Error: ${e.message}")
+                    // Show user-friendly message
+                    _uiState.value = FlightTrackingState.Error("Network Error. Please try again later")
                 }
                 .collect { result -> 
                     when (result) {
@@ -93,7 +97,10 @@ class FlightTrackingViewModel(application: Application) : AndroidViewModel(appli
                             }
                         }
                         is Result.Error -> {
-                            _uiState.value = FlightTrackingState.Error(result.message)
+                            // Log the detailed error
+                            Log.e("FlightTrackingViewModel", "API Error: ${result.message}")
+                            // Show user-friendly message
+                            _uiState.value = FlightTrackingState.Error("Network Error. Please try again later")
                             stopTracking(true)
                         }
                     }
