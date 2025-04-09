@@ -50,10 +50,11 @@ import java.util.Locale
 fun FlightTrackerScreen(
     uiState: FlightTrackingState,
     lastFetchTime: String?,
-    isTrackingStopped: Boolean, // Add this parameter to receive tracking status
+    isTrackingStopped: Boolean,
     onTrackFlight: (String) -> Unit,
     onStopTracking: () -> Unit,
-    onNavigateToStats: () -> Unit
+    onNavigateToStats: () -> Unit,
+    onResumeTracking: () -> Unit = {} // Add resume tracking callback
 ) {
     var flightNumber by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
@@ -122,10 +123,16 @@ fun FlightTrackerScreen(
                 }
                 
                 Button(
-                    onClick = { onStopTracking() },
+                    onClick = { 
+                        if (isTrackingStopped) {
+                            onResumeTracking()
+                        } else {
+                            onStopTracking()
+                        }
+                    },
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("Stop Tracking")
+                    Text(if (isTrackingStopped) "Resume Tracking" else "Stop Tracking")
                 }
             }
             
@@ -226,7 +233,7 @@ fun FlightInfoContent(
                 Row(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    flight.airline?.name?.let { airlineName ->
+                    flight.airline?.name?.let { airlineName -> 
                         Text(
                             text = airlineName,
                             style = MaterialTheme.typography.titleMedium,
@@ -236,7 +243,7 @@ fun FlightInfoContent(
                     
                     Spacer(modifier = Modifier.width(8.dp))
                     
-                    flight.flightInfo?.iata?.let { flightIata ->
+                    flight.flightInfo?.iata?.let { flightIata -> 
                         Text(
                             text = "Flight $flightIata",
                             style = MaterialTheme.typography.titleLarge,
@@ -247,7 +254,7 @@ fun FlightInfoContent(
                 
                 Spacer(modifier = Modifier.height(8.dp))
                 
-                flight.flightStatus?.let { status ->
+                flight.flightStatus?.let { status -> 
                     Text(
                         text = "Status: $status",
                         style = MaterialTheme.typography.bodyLarge,
@@ -401,13 +408,46 @@ fun FlightInfoContent(
                         }
                     }
                 }
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                // Flight time information
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        ),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = "Flight Duration",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            
+                            val flightTime = calculateFlightTimeDisplay(flight)
+                            Text(
+                                text = flightTime,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
             }
         }
         
         Spacer(modifier = Modifier.height(16.dp))
         
         // Live data if available
-        flight.live?.let { liveData ->
+        flight.live?.let { liveData -> 
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
@@ -424,7 +464,7 @@ fun FlightInfoContent(
                     Spacer(modifier = Modifier.height(8.dp))
                     
                     // Updated time
-                    liveData.updated?.let { updated ->
+                    liveData.updated?.let { updated -> 
                         Text(
                             text = "Last Updated: ${formatDateTime(updated)}",
                             style = MaterialTheme.typography.bodyMedium
@@ -434,19 +474,19 @@ fun FlightInfoContent(
                     Spacer(modifier = Modifier.height(8.dp))
                     
                     // Flight parameters
-                    liveData.altitude?.let { altitude ->
+                    liveData.altitude?.let { altitude -> 
                         FlightParameter("Altitude", "$altitude ft")
                     }
                     
-                    liveData.speedHorizontal?.let { speed ->
+                    liveData.speedHorizontal?.let { speed -> 
                         FlightParameter("Speed", "$speed km/h")
                     }
                     
-                    liveData.speedVertical?.let { vspeed ->
+                    liveData.speedVertical?.let { vspeed -> 
                         FlightParameter("Vertical Speed", "$vspeed m/s")
                     }
                     
-                    liveData.direction?.let { direction ->
+                    liveData.direction?.let { direction -> 
                         FlightParameter("Direction", "$direction°")
                     }
                     
@@ -469,7 +509,7 @@ fun FlightInfoContent(
                     // Visual indicator for ground status
                     Spacer(modifier = Modifier.height(16.dp))
                     
-                    liveData.isGround?.let { isGround ->
+                    liveData.isGround?.let { isGround -> 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.Center
@@ -563,4 +603,45 @@ fun formatDateTime(isoDateTime: String?): String? {
 fun getCurrentTime(): String {
     val dateFormat = SimpleDateFormat("MMM dd, yyyy HH:mm:ss", Locale.getDefault())
     return dateFormat.format(Date())
+}
+
+// Helper function to calculate flight time display
+fun calculateFlightTimeDisplay(flight: Flight): String {
+    val actualDepartureTime = flight.departure?.actual?.let { parseDateTime(it)?.time }
+    val actualArrivalTime = flight.arrival?.actual?.let { parseDateTime(it)?.time }
+
+    val scheduledDepartureTime = flight.departure?.scheduled?.let { parseDateTime(it)?.time }
+    val scheduledArrivalTime = flight.arrival?.scheduled?.let { parseDateTime(it)?.time }
+
+    val departureDelayMinutes = flight.departure?.delay
+    val arrivalDelayMinutes = flight.arrival?.delay
+
+    val flightTimeMinutes = if (actualArrivalTime != null && actualDepartureTime != null) {
+        ((actualArrivalTime - actualDepartureTime) / 60_000).toInt()
+    } else if (scheduledDepartureTime != null && scheduledArrivalTime != null) {
+        val departureDelayMs = departureDelayMinutes?.times(60_000L) ?: 0L
+        val arrivalDelayMs = arrivalDelayMinutes?.times(60_000L) ?: 0L
+
+        (((scheduledArrivalTime + arrivalDelayMs) - (scheduledDepartureTime + departureDelayMs)) / 60_000).toInt()
+    } else {
+        null
+    }
+
+    return if (flightTimeMinutes != null && flightTimeMinutes > 0) {
+        val hours = flightTimeMinutes / 60
+        val minutes = flightTimeMinutes % 60
+        "${hours}h ${minutes}m"
+    } else {
+        "N/A"
+    }
+}
+
+// Helper function to parse date-time
+fun parseDateTime(isoDateTime: String): Date? {
+    return try {
+        val inputFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
+        inputFormat.parse(isoDateTime)
+    } catch (e: Exception) {
+        null
+    }
 }

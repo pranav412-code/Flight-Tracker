@@ -32,10 +32,14 @@ class FlightTrackingViewModel(application: Application) : AndroidViewModel(appli
     private val _isTrackingStopped = MutableStateFlow(false)
     val isTrackingStopped: StateFlow<Boolean> = _isTrackingStopped
     
+    // Add a flag to track if flight tracking was stopped and can be resumed
+    private val _canResumeTracking = MutableStateFlow(false)
+    val canResumeTracking: StateFlow<Boolean> = _canResumeTracking
+    
     private var trackingTimer: Timer? = null
     private var currentFlightNumber: String? = null
     
-    fun trackFlight(flightNumber: String) {
+    fun trackFlight(flightNumber: String, isResuming: Boolean = false) {
         if (flightNumber.isBlank()) {
             _uiState.value = FlightTrackingState.Error("Please enter a valid flight number")
             return
@@ -45,6 +49,7 @@ class FlightTrackingViewModel(application: Application) : AndroidViewModel(appli
         
         // Reset tracking stopped flag
         _isTrackingStopped.value = false
+        _canResumeTracking.value = false
         
         // Cancel any existing timer
         stopTracking(false)
@@ -53,19 +58,19 @@ class FlightTrackingViewModel(application: Application) : AndroidViewModel(appli
         currentFlightNumber = flightNumber
         
         // Start fetching flight data immediately
-        fetchFlightData(flightNumber)
+        fetchFlightData(flightNumber, !isResuming) // Pass true for isInitialTracking if not resuming
         
         // Set up periodic updates every minute
         trackingTimer = Timer().apply {
             scheduleAtFixedRate(object : TimerTask() {
                 override fun run() {
-                    fetchFlightData(flightNumber)
+                    fetchFlightData(flightNumber, false) // Always pass false for updates
                 }
             }, 60000, 60000) // Update every minute after the first fetch
         }
     }
     
-    private fun fetchFlightData(flightNumber: String) {
+    private fun fetchFlightData(flightNumber: String, isInitialTracking: Boolean = false) {
         viewModelScope.launch {
             // Update fetch time for every attempt
             _lastFetchTime.value = getCurrentTime()
@@ -90,7 +95,7 @@ class FlightTrackingViewModel(application: Application) : AndroidViewModel(appli
                                 _uiState.value = FlightTrackingState.Success(flight)
                                 
                                 // Store flight data in the database for statistics
-                                saveFlight(flight)
+                                saveFlight(flight, isInitialTracking)
                             } else {
                                 _uiState.value = FlightTrackingState.Error("Flight not found")
                                 stopTracking(true)
@@ -108,19 +113,26 @@ class FlightTrackingViewModel(application: Application) : AndroidViewModel(appli
         }
     }
     
-    private fun saveFlight(flight: Flight) {
+    private fun saveFlight(flight: Flight, isInitialTracking: Boolean) {
         viewModelScope.launch {
-            repository.saveFlight(flight)
+            repository.saveFlight(flight, isInitialTracking)
+        }
+    }
+    
+    fun resumeTracking() {
+        currentFlightNumber?.let {
+            trackFlight(it, true)
         }
     }
     
     fun stopTracking(setStoppedFlag: Boolean = true) {
         trackingTimer?.cancel()
         trackingTimer = null
-        currentFlightNumber = null
         
         if (setStoppedFlag) {
             _isTrackingStopped.value = true
+            // Enable resume functionality if we have a flight number
+            _canResumeTracking.value = currentFlightNumber != null
         }
     }
     

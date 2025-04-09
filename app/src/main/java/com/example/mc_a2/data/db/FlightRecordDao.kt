@@ -30,10 +30,14 @@ interface FlightRecordDao {
         SELECT AVG(
             CASE 
                 WHEN flightTime IS NOT NULL 
-                THEN flightTime
-                WHEN actualArrivalTime IS NOT NULL AND actualDepartureTime IS NOT NULL 
-                THEN (actualArrivalTime - actualDepartureTime) / 60000
-                ELSE (scheduledArrivalTime - scheduledDepartureTime + IFNULL(arrivalDelayMinutes, 0) * 60000) / 60000
+                    THEN flightTime
+                WHEN actualArrivalTime IS NOT NULL AND actualDepartureTime IS NOT NULL THEN 
+                    (actualArrivalTime - actualDepartureTime) / 60000
+                WHEN scheduledArrivalTime IS NOT NULL AND scheduledDepartureTime IS NOT NULL THEN 
+                    ((scheduledArrivalTime + IFNULL(arrivalDelayMinutes, 0) * 60000) - 
+                    (scheduledDepartureTime + IFNULL(departureDelayMinutes, 0) * 60000)) / 60000
+                ELSE
+                    NULL
             END
         ) as avgTime
         FROM flight_records
@@ -58,6 +62,18 @@ interface FlightRecordDao {
         departureAirport: String,
         arrivalAirport: String,
         startDate: Long
+    ): Int
+    
+    /**
+     * Gets the number of distinct flights for a specific route
+     */
+    @Query("""
+        SELECT COUNT(DISTINCT flightNumber) FROM flight_records
+        WHERE departureAirport = :departureAirport AND arrivalAirport = :arrivalAirport
+    """)
+    suspend fun getDistinctFlightCountForRoute(
+        departureAirport: String,
+        arrivalAirport: String
     ): Int
     
     /**

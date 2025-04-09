@@ -60,12 +60,18 @@ fun MainScreen() {
 
 @Composable
 fun FlightTrackerAppWithNav(onNavigateToStats: () -> Unit) {
-    FlightTrackerApp(onNavigateToStats = onNavigateToStats)
+    val viewModel: FlightTrackingViewModel = viewModel()
+    FlightTrackerRoute(
+        viewModel = viewModel,
+        onNavigateToStats = onNavigateToStats
+    )
 }
 
 @Composable
-fun FlightTrackerApp(onNavigateToStats: () -> Unit) {
-    val viewModel: FlightTrackingViewModel = viewModel()
+fun FlightTrackerRoute(
+    viewModel: FlightTrackingViewModel,
+    onNavigateToStats: () -> Unit
+) {
     val uiState by viewModel.uiState.collectAsState()
     val lastFetchTime by viewModel.lastFetchTime.collectAsState()
     val isTrackingStopped by viewModel.isTrackingStopped.collectAsState()
@@ -80,7 +86,10 @@ fun FlightTrackerApp(onNavigateToStats: () -> Unit) {
         onStopTracking = {
             viewModel.stopTracking()
         },
-        onNavigateToStats = onNavigateToStats
+        onNavigateToStats = onNavigateToStats,
+        onResumeTracking = {
+            viewModel.resumeTracking()
+        }
     )
 }
 
