@@ -5,6 +5,7 @@ import com.example.mc_a2.data.api.NetworkModule
 import com.example.mc_a2.data.db.FlightDatabase
 import com.example.mc_a2.data.db.FlightRecord
 import com.example.mc_a2.data.db.RouteInfo
+import com.example.mc_a2.data.db.RouteStatisticEntity
 import com.example.mc_a2.data.model.Flight
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -17,9 +18,11 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlin.math.roundToInt
 
 class FlightRepository(private val database: FlightDatabase) {
     private val flightRecordDao = database.flightRecordDao()
+    private val routeStatisticDao = database.routeStatisticDao()
     private val apiService = NetworkModule.flightApiService
     private val apiKey = NetworkModule.getApiKey()
     
@@ -59,6 +62,9 @@ class FlightRepository(private val database: FlightDatabase) {
                     val flightRecord = convertToFlightRecord(flight)
                     if (flightRecord != null) {
                         flightRecordDao.insertFlightRecord(flightRecord)
+                        
+                        // Update route statistics
+                        updateRouteStatistics(flightRecord)
                     }
                 }
                 
@@ -81,6 +87,9 @@ class FlightRepository(private val database: FlightDatabase) {
             val flightRecord = convertToFlightRecord(flight)
             if (flightRecord != null) {
                 flightRecordDao.insertFlightRecord(flightRecord)
+                
+                // Update route statistics
+                updateRouteStatistics(flightRecord)
             }
         } catch (e: Exception) {
             // Handle any exceptions during saving
@@ -112,6 +121,20 @@ class FlightRepository(private val database: FlightDatabase) {
             // Current flight date
             val flightDate = flight.flightDate ?: getTodayDate()
             
+            // Calculate the flight time in minutes
+            val flightTimeMinutes = if (actualArrivalTime != null && actualDepartureTime != null) {
+                // Use actual times if available
+                ((actualArrivalTime - actualDepartureTime) / 60_000).toInt()
+            } else if (scheduledDepartureTime != null && scheduledArrivalTime != null) {
+                // Fall back to scheduled times plus delay
+                val departureDelayMs = departureDelayMinutes?.times(60_000L) ?: 0L
+                val arrivalDelayMs = arrivalDelayMinutes?.times(60_000L) ?: 0L
+                
+                (((scheduledArrivalTime + arrivalDelayMs) - (scheduledDepartureTime + departureDelayMs)) / 60_000).toInt()
+            } else {
+                null
+            }
+            
             // Create and return FlightRecord
             return FlightRecord(
                 flightNumber = flightNumber,
@@ -126,6 +149,7 @@ class FlightRepository(private val database: FlightDatabase) {
                 actualArrivalTime = actualArrivalTime,
                 departureDelayMinutes = departureDelayMinutes,
                 arrivalDelayMinutes = arrivalDelayMinutes,
+                flightTime = flightTimeMinutes,
                 flightDate = flightDate
             )
         } catch (e: Exception) {
@@ -138,7 +162,12 @@ class FlightRepository(private val database: FlightDatabase) {
         return flightRecordDao.getAllFlightRecords()
     }
     
-    // Get average flight time for a route
+    // Get all route statistics
+    fun getAllRouteStatistics(): Flow<List<RouteStatisticEntity>> {
+        return routeStatisticDao.getAllRouteStatistics()
+    }
+    
+    // Get average flight time for a route (keep for backward compatibility)
     suspend fun getAverageFlightTimeForRoute(
         departureAirport: String,
         arrivalAirport: String,
@@ -148,11 +177,14 @@ class FlightRepository(private val database: FlightDatabase) {
             add(Calendar.DAY_OF_YEAR, -daysToLookBack)
         }.timeInMillis
         
-        return flightRecordDao.getAverageFlightTimeForRoute(
+        // Get from flight records in minutes and convert to milliseconds for compatibility with older code
+        val avgMinutes = flightRecordDao.getAverageFlightTimeForRoute(
             departureAirport,
             arrivalAirport,
             startDate
         )
+        
+        return avgMinutes?.toLong()?.times(60_000L)
     }
     
     // Get all unique routes in the database
@@ -178,19 +210,85 @@ class FlightRepository(private val database: FlightDatabase) {
     }
     
     // Format average time in a user-friendly way
-    fun formatAverageTime(milliseconds: Long): String {
-        val hours = TimeUnit.MILLISECONDS.toHours(milliseconds)
-        val minutes = TimeUnit.MILLISECONDS.toMinutes(milliseconds) % 60
-        return "${hours}h ${minutes}m"
+    fun formatAverageTime(minutes: Int): String {
+        val hours = minutes / 60
+        val mins = minutes % 60
+        return "${hours}h ${mins}m"
     }
     
-    // Clean up old records
+    // Private method to update route statistics when a new flight record is added
+    private suspend fun updateRouteStatistics(flightRecord: FlightRecord) {
+        try {
+            val departureAirport = flightRecord.departureAirport
+            val arrivalAirport = flightRecord.arrivalAirport
+            
+            // Calculate flight time for this record in minutes
+            val flightTimeMinutes = calculateFlightTimeMinutes(flightRecord)
+            
+            // Get existing route statistic if it exists
+            val existingStatistic = routeStatisticDao.getRouteStatistic(departureAirport, arrivalAirport)
+            
+            if (existingStatistic == null) {
+                // Create new route statistic
+                val newStatistic = RouteStatisticEntity(
+                    departureAirport = departureAirport,
+                    departureCity = flightRecord.departureCity,
+                    arrivalAirport = arrivalAirport,
+                    arrivalCity = flightRecord.arrivalCity,
+                    averageFlightTimeMinutes = flightTimeMinutes,
+                    flightCount = 1
+                )
+                routeStatisticDao.insertOrUpdateRouteStatistic(newStatistic)
+            } else {
+                // Update existing route statistic
+                val totalFlightTime = (existingStatistic.averageFlightTimeMinutes * existingStatistic.flightCount) + flightTimeMinutes
+                val newFlightCount = existingStatistic.flightCount + 1
+                val newAverageTime = totalFlightTime / newFlightCount
+                
+                routeStatisticDao.updateRouteStatistics(
+                    departureAirport = departureAirport,
+                    arrivalAirport = arrivalAirport,
+                    flightCount = newFlightCount,
+                    averageTimeMinutes = newAverageTime
+                )
+            }
+        } catch (e: Exception) {
+            // Handle exceptions
+        }
+    }
+    
+    // Calculate the flight time for a flight record in minutes
+    private fun calculateFlightTimeMinutes(flightRecord: FlightRecord): Int {
+        // If the flightTime field is populated, use it directly
+        if (flightRecord.flightTime != null) {
+            return flightRecord.flightTime
+        }
+        
+        // Otherwise calculate it as before
+        val flightTimeMillis = if (flightRecord.actualArrivalTime != null && flightRecord.actualDepartureTime != null) {
+            // Use actual times if available
+            flightRecord.actualArrivalTime - flightRecord.actualDepartureTime
+        } else {
+            // Fall back to scheduled times plus delay
+            val departureDelay = flightRecord.departureDelayMinutes?.times(60_000L) ?: 0L
+            val arrivalDelay = flightRecord.arrivalDelayMinutes?.times(60_000L) ?: 0L
+            
+            val scheduledDuration = flightRecord.scheduledArrivalTime - flightRecord.scheduledDepartureTime
+            scheduledDuration + arrivalDelay - departureDelay
+        }
+        
+        // Convert milliseconds to minutes
+        return (flightTimeMillis / 60_000).toInt()
+    }
+    
+    // Clean up old records and statistics
     suspend fun cleanUpOldRecords(daysToKeep: Int = 30) {
         val cutOffDate = Calendar.getInstance().apply {
             add(Calendar.DAY_OF_YEAR, -daysToKeep)
         }.timeInMillis
         
         flightRecordDao.deleteOldRecords(cutOffDate)
+        routeStatisticDao.deleteOldRouteStatistics(cutOffDate)
     }
     
     // Helper methods for date handling
@@ -220,7 +318,6 @@ class FlightRepository(private val database: FlightDatabase) {
     // New method to fetch and store flight data by route
     suspend fun fetchAndStoreFlightDataByRoute(departureAirport: String, arrivalAirport: String): Result<Flight?> {
         return try {
-            // Assumes apiService has a method getFlightByRoute; adjust endpoint and parameters as needed.
             val response = apiService.getFlightByRoute(apiKey, departureAirport, arrivalAirport)
             if (response.isSuccessful) {
                 val flightResponse = response.body()
@@ -229,6 +326,9 @@ class FlightRepository(private val database: FlightDatabase) {
                     val flightRecord = convertToFlightRecord(flight)
                     if (flightRecord != null) {
                         flightRecordDao.insertFlightRecord(flightRecord)
+                        
+                        // Update route statistics
+                        updateRouteStatistics(flightRecord)
                     }
                 }
                 Result.Success(flight)

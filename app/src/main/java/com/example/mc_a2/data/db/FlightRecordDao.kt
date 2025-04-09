@@ -24,14 +24,16 @@ interface FlightRecordDao {
     suspend fun getLatestFlightRecord(flightNumber: String): FlightRecord?
     
     /**
-     * Gets average flight time in milliseconds for a given route, accounting for delays
+     * Gets average flight time in minutes for a given route
      */
     @Query("""
         SELECT AVG(
             CASE 
+                WHEN flightTime IS NOT NULL 
+                THEN flightTime
                 WHEN actualArrivalTime IS NOT NULL AND actualDepartureTime IS NOT NULL 
-                THEN actualArrivalTime - actualDepartureTime
-                ELSE scheduledArrivalTime - scheduledDepartureTime + IFNULL(arrivalDelayMinutes, 0) * 60 * 1000
+                THEN (actualArrivalTime - actualDepartureTime) / 60000
+                ELSE (scheduledArrivalTime - scheduledDepartureTime + IFNULL(arrivalDelayMinutes, 0) * 60000) / 60000
             END
         ) as avgTime
         FROM flight_records
@@ -42,7 +44,7 @@ interface FlightRecordDao {
         departureAirport: String,
         arrivalAirport: String,
         startDate: Long // Start date to filter records (e.g., 7 days ago)
-    ): Long?
+    ): Int? // Changed from Long? to Int? since we're returning minutes now
     
     /**
      * Gets the number of flights collected for a specific route since a given date

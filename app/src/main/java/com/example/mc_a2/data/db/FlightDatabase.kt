@@ -5,9 +5,10 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [FlightRecord::class], version = 1, exportSchema = false)
+@Database(entities = [FlightRecord::class, RouteStatisticEntity::class], version = 3, exportSchema = false)
 abstract class FlightDatabase : RoomDatabase() {
     abstract fun flightRecordDao(): FlightRecordDao
+    abstract fun routeStatisticDao(): RouteStatisticDao
     
     companion object {
         @Volatile

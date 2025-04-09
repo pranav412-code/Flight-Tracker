@@ -33,6 +33,9 @@ data class FlightRecord(
     val departureDelayMinutes: Int?,
     val arrivalDelayMinutes: Int?,
     
+    // Flight duration in minutes
+    val flightTime: Int?,
+    
     // Metadata
     val recordDate: Long = System.currentTimeMillis(), // When we collected this data
     val flightDate: String // The date of the flight (YYYY-MM-DD)

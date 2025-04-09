@@ -8,6 +8,7 @@ import com.example.mc_a2.data.FlightRepository
 import com.example.mc_a2.data.db.FlightDatabase
 import com.example.mc_a2.data.db.FlightRecord
 import com.example.mc_a2.data.db.RouteInfo
+import com.example.mc_a2.data.db.RouteStatisticEntity
 import com.example.mc_a2.workers.FlightDataManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,7 +38,24 @@ class FlightStatisticsViewModel(application: Application) : AndroidViewModel(app
         viewModelScope.launch {
             repository.getAllFlightRecords().collectLatest { records ->
                 _flightRecords.value = records
-                updateRouteStatistics()
+            }
+        }
+        
+        // Start monitoring route statistics from the new table
+        viewModelScope.launch {
+            repository.getAllRouteStatistics().collectLatest { routeStats ->
+                // Convert from RouteStatisticEntity to RouteStatistic
+                _routeStatistics.value = routeStats.map { entity ->
+                    RouteStatistic(
+                        departureAirport = entity.departureAirport,
+                        departureName = entity.departureCity,
+                        arrivalAirport = entity.arrivalAirport,
+                        arrivalName = entity.arrivalCity,
+                        averageTime = repository.formatAverageTime(entity.averageFlightTimeMinutes),
+                        averageTimeMinutes = entity.averageFlightTimeMinutes,
+                        flightCount = entity.flightCount
+                    )
+                }.sortedByDescending { it.flightCount }
             }
         }
         
@@ -100,60 +118,11 @@ class FlightStatisticsViewModel(application: Application) : AndroidViewModel(app
             flightDataManager.cancelAllFlightDataCollection()
         }
     }
-    
-    /**
-     * Compute average flight time for all monitored routes
-     */
-    private suspend fun updateRouteStatistics() {
-        viewModelScope.launch {
-            val routes = repository.getAllUniqueRoutes()
-            val stats = mutableListOf<RouteStatistic>()
-            
-            for (route in routes) {
-                val avgTime = repository.getAverageFlightTimeForRoute(
-                    route.departureAirport,
-                    route.arrivalAirport
-                )
-                
-                val flightCount = repository.getFlightCountForRoute(
-                    route.departureAirport,
-                    route.arrivalAirport
-                )
-                
-                if (avgTime != null && flightCount > 0) {
-                    val formattedTime = repository.formatAverageTime(avgTime)
-                    
-                    // Find departure and arrival city names from records
-                    val record = _flightRecords.value.firstOrNull { 
-                        it.departureAirport == route.departureAirport && 
-                        it.arrivalAirport == route.arrivalAirport 
-                    }
-                    
-                    val departureName = record?.departureCity ?: route.departureAirport
-                    val arrivalName = record?.arrivalCity ?: route.arrivalAirport
-                    
-                    stats.add(
-                        RouteStatistic(
-                            departureAirport = route.departureAirport,
-                            departureName = departureName,
-                            arrivalAirport = route.arrivalAirport,
-                            arrivalName = arrivalName,
-                            averageTime = formattedTime,
-                            averageTimeMillis = avgTime,
-                            flightCount = flightCount
-                        )
-                    )
-                }
-            }
-            
-            // Sort by flight count (most monitored routes first)
-            _routeStatistics.value = stats.sortedByDescending { it.flightCount }
-        }
-    }
 }
 
 /**
  * Data class to represent statistics for a flight route
+ * This is a UI model separate from the database entity
  */
 data class RouteStatistic(
     val departureAirport: String,
@@ -161,6 +130,6 @@ data class RouteStatistic(
     val arrivalAirport: String,
     val arrivalName: String,
     val averageTime: String,
-    val averageTimeMillis: Long,
+    val averageTimeMinutes: Int, // Changed from averageTimeMillis to averageTimeMinutes
     val flightCount: Int
 )
