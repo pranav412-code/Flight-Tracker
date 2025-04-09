@@ -92,8 +92,8 @@ class FlightStatisticsViewModel(application: Application) : AndroidViewModel(app
                         // First, trigger an immediate data collection
                         flightDataManager.collectFlightDataNow(flightsToTrack)
                         
-                        // Then, schedule the periodic data collection with initial delay of 8 hours
-                        flightDataManager.scheduleFlightDataCollection(flightsToTrack, 8)
+                        // Then, schedule the periodic data collection with initial delay of 15 minutes
+                        flightDataManager.scheduleFlightDataCollection(flightsToTrack, 15)
                     }
                 } else {
                     // No flights have been tracked yet

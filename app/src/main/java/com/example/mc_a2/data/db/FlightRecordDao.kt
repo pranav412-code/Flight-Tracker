@@ -65,13 +65,13 @@ interface FlightRecordDao {
     ): Int
     
     /**
-     * Gets the number of distinct flights for a specific route
+     * Gets the number of flights for a specific route
      */
     @Query("""
-        SELECT COUNT(DISTINCT flightNumber) FROM flight_records
+        SELECT COUNT(flightNumber) FROM flight_records
         WHERE departureAirport = :departureAirport AND arrivalAirport = :arrivalAirport
     """)
-    suspend fun getDistinctFlightCountForRoute(
+    suspend fun getFlightCountForRoute(
         departureAirport: String,
         arrivalAirport: String
     ): Int

@@ -24,9 +24,9 @@ class FlightDataManager(private val context: Context) {
      * Collects data for at least 3 flights per day
      * 
      * @param flightNumbers List of flight numbers to monitor
-     * @param initialDelayHours Number of hours to delay the first execution
+     * @param initialDelayMinutes Number of minutes to delay the first execution
      */
-    fun scheduleFlightDataCollection(flightNumbers: List<String>, initialDelayHours: Long = 8) {
+    fun scheduleFlightDataCollection(flightNumbers: List<String>, initialDelayMinutes: Long = 8) {
         // Check if periodic collection is already scheduled
         if (isFlightDataCollectionScheduled()) {
             Log.d("FlightDataManager", "Periodic flight data collection already scheduled, skipping")
@@ -38,13 +38,13 @@ class FlightDataManager(private val context: Context) {
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
         
-        // Create work request to run 3 times per day (every 8 hours)
+        // Create work request to run every 15 minutes
         // With initial delay to avoid immediate execution
         val workRequest = PeriodicWorkRequestBuilder<FlightDataCollectionWorker>(
-            8, TimeUnit.HOURS
+            15, TimeUnit.MINUTES
         )
             .setConstraints(constraints)
-            .setInitialDelay(initialDelayHours, TimeUnit.HOURS) // Add initial delay
+            .setInitialDelay(initialDelayMinutes, TimeUnit.MINUTES) // Add initial delay
             .addTag(FlightDataCollectionWorker.WORK_NAME_PERIODIC)
             .build()
         

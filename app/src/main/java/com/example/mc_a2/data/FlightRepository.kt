@@ -245,8 +245,8 @@ class FlightRepository(private val database: FlightDatabase) {
             val departureAirport = flightRecord.departureAirport
             val arrivalAirport = flightRecord.arrivalAirport
             
-            // Get count of distinct flights for this route
-            val flightCount = flightRecordDao.getDistinctFlightCountForRoute(
+            // Get count of flights for this route
+            val flightCount = flightRecordDao.getFlightCountForRoute(
                 departureAirport,
                 arrivalAirport
             )
