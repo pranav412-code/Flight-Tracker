@@ -1,4 +1,4 @@
-# Flight Tracker Application
+# Flight Tracker
 
 ## Overview
 A modern Android application for tracking real-time flight data, providing users with up-to-date information about flights, including departure and arrival times, delays, and route information. The app offers both online functionality using the Aviation Stack API and offline capabilities through local data storage.
